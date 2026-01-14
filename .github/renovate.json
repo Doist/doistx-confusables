@@ -1,0 +1,7 @@
+{
+  "extends": [
+    "github>doist/renovate-config:kotlin-base",
+    ":rebaseStalePrs",
+    ":disableDependencyDashboard"
+  ]
+}

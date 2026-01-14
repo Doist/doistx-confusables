@@ -1,0 +1,38 @@
+name: Scan with detekt
+
+on:
+  push:
+    branches: [ main ]
+  pull_request:
+    branches: [ main ]
+  schedule:
+     - cron: '00 6 * * 1'
+
+jobs:
+  scan:
+    name: Scan
+    runs-on: ubuntu-latest
+    timeout-minutes: 60
+    steps:
+    - uses: actions/checkout@v4
+    - name: Setup detekt
+      id: setup
+      run: |
+        JARFILE="$(mktemp -d)/detekt.jar"
+        curl --request GET \
+          --url https://github.com/detekt/detekt/releases/download/v1.23.7/detekt-cli-1.23.7-all.jar \
+          --silent \
+          --location \
+          --output $JARFILE
+        echo "jarfile=$JARFILE" >> $GITHUB_OUTPUT
+    - name: Run detekt
+      continue-on-error: true
+      run: |
+        java -jar ${{ steps.setup.outputs.jarfile }} \
+          --input ${{ github.workspace }} \
+          --report sarif:${{ github.workspace }}/detekt.sarif.json
+    - name: Upload results
+      uses: github/codeql-action/upload-sarif@v3
+      with:
+        sarif_file: ${{ github.workspace }}/detekt.sarif.json
+        checkout_path: ${{ github.workspace }}
