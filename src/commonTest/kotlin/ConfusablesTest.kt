@@ -40,4 +40,17 @@ class ConfusablesTest {
     fun nonConfusableStrings() {
         assertFalse("hello".isConfusable("world"))
     }
+
+    @Test
+    fun emptyString() {
+        assertEquals("", "".toSkeleton())
+        assertTrue("".isConfusable(""))
+    }
+
+    @Test
+    fun astralPlaneCodePoints() {
+        val mathematicalDoubleStruckA = "\uD835\uDD38" // U+1D538
+        assertEquals("A", mathematicalDoubleStruckA.toSkeleton())
+        assertTrue("A".isConfusable(mathematicalDoubleStruckA))
+    }
 }
