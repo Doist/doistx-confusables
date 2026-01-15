@@ -11,6 +11,17 @@ public fun String.isConfusable(other: String): Boolean = toSkeleton() == other.t
 /**
  * Returns the UTS #39 confusable skeleton (specifically, `internalSkeleton`) for this string.
  *
+ * This follows the UTS #39 `internalSkeleton` algorithm:
+ * - Normalize to NFD
+ * - Remove `Default_Ignorable_Code_Point`
+ * - Replace each code point with its confusable prototype from `confusables.txt` (if any)
+ * - Normalize to NFD again
+ *
+ * Note: This implementation relies on `confusables.txt` being transitively closed (mapping targets do not contain
+ * further mappable code points). The test suite asserts this for the pinned Unicode data.
+ *
+ * Input is treated as UTF-16. Unpaired surrogates are treated as individual code units and passed through as-is.
+ *
  * Note: The returned value is intended for internal comparison only. It is not suitable for display and should not be
  * treated as a general “normalization” of identifiers.
  */
