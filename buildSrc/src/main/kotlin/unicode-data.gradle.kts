@@ -1,57 +1,150 @@
 /*
- * Download and generate Unicode data tables used by the library.
+ * Generate Unicode data tables used by the library.
  *
- * This is intentionally an opt-in task (not wired into compilation) because it requires network access.
+ * - `generateUnicodeData` is wired into compilation and runs offline, using `unicode-data/` inputs.
+ * - `updateUnicodeData` refreshes `unicode-data/` from unicode.org (network required) and regenerates.
  */
 
+import java.io.File
 import java.net.URL
+import org.jetbrains.kotlin.gradle.dsl.KotlinMultiplatformExtension
 
-private val defaultUnicodeVersion = "16.0.0"
 private val outputPackage = "doist.x.confusables"
-private val outputDir = "src/commonMain/kotlin/doist/x/confusables"
+private val unicodeDataDir = "unicode-data"
+private val confusablesFileName = "confusables.txt"
+private val derivedCorePropertiesFileName = "DerivedCoreProperties.txt"
+private val generatedSourcesDir = "generated/unicode-data/commonMain/kotlin"
+
+val confusablesInputFile = layout.projectDirectory.file("$unicodeDataDir/$confusablesFileName")
+val derivedCorePropertiesInputFile = layout.projectDirectory.file("$unicodeDataDir/$derivedCorePropertiesFileName")
+val generatedKotlinRoot = layout.buildDirectory.dir(generatedSourcesDir)
+
+extensions.configure<KotlinMultiplatformExtension>("kotlin") {
+    sourceSets.named("commonMain") {
+        kotlin.srcDir(generatedKotlinRoot)
+    }
+}
+
+val generateUnicodeData = tasks.register("generateUnicodeData") {
+    group = "build setup"
+    description = "Generate Kotlin tables from Unicode data files in `unicode-data/`."
+
+    inputs.file(confusablesInputFile)
+    inputs.file(derivedCorePropertiesInputFile)
+    outputs.dir(generatedKotlinRoot)
+
+    doLast {
+        val confusablesText = readRequiredText(confusablesInputFile.asFile, confusablesInputFile.asFile.path)
+        val derivedText = readRequiredText(derivedCorePropertiesInputFile.asFile, derivedCorePropertiesInputFile.asFile.path)
+        val unicodeVersion = unicodeVersionFromConfusables(confusablesText)
+
+        writeKotlinTables(
+            outputRoot = generatedKotlinRoot.get().asFile,
+            packageName = outputPackage,
+            unicodeVersion = unicodeVersion,
+            confusablesText = confusablesText,
+            derivedCorePropertiesText = derivedText,
+        )
+    }
+}
 
 tasks.register("updateUnicodeData") {
     group = "build setup"
-    description = "Download Unicode data files and regenerate Kotlin tables."
+    description = "Download Unicode data files into `unicode-data/` and regenerate Kotlin tables (network required)."
 
-    val unicodeVersion = providers.gradleProperty("unicodeVersion").orElse(defaultUnicodeVersion)
-    val outputDirectory = layout.projectDirectory.dir(outputDir)
+    val unicodeVersionProperty = providers.gradleProperty("unicodeVersion")
 
-    outputs.dir(outputDirectory)
+    outputs.file(confusablesInputFile)
+    outputs.file(derivedCorePropertiesInputFile)
+    outputs.dir(generatedKotlinRoot)
 
     doLast {
-        val version = unicodeVersion.get()
+        val version = unicodeVersionProperty.orNull
+            ?: pinnedUnicodeVersion(confusablesInputFile.asFile)
+            ?: error("Missing -PunicodeVersion and no existing `${confusablesInputFile.asFile.path}` to infer from.")
 
         val confusablesUrl = "https://www.unicode.org/Public/security/$version/confusables.txt"
         val derivedCorePropertiesUrl = "https://www.unicode.org/Public/$version/ucd/DerivedCoreProperties.txt"
 
         val confusablesText = fetchText(confusablesUrl)
-        require(Regex("^#\\s*Version:\\s*${Regex.escape(version)}\\s*$", setOf(RegexOption.MULTILINE)).containsMatchIn(confusablesText)) {
-            "confusables.txt version header did not match $version; did you mean to pass -PunicodeVersion=? (url=$confusablesUrl)"
+        val headerVersion = unicodeVersionFromConfusables(confusablesText)
+        require(headerVersion == version) {
+            "confusables.txt version header did not match $version (got $headerVersion); " +
+                "did you mean to pass -PunicodeVersion=? (url=$confusablesUrl)"
         }
 
-        val mappings = parseConfusables(confusablesText)
-        val defaultIgnorables = parseDefaultIgnorables(fetchText(derivedCorePropertiesUrl))
+        val derivedText = fetchText(derivedCorePropertiesUrl)
 
-        val outputRoot = outputDirectory.asFile
-        outputRoot.mkdirs()
+        confusablesInputFile.asFile.parentFile.mkdirs()
+        confusablesInputFile.asFile.writeText(confusablesText, Charsets.UTF_8)
+        derivedCorePropertiesInputFile.asFile.writeText(derivedText, Charsets.UTF_8)
 
-        outputRoot.resolve("ConfusablesData.kt").writeText(
-            generateConfusablesData(outputPackage, version, mappings),
-            Charsets.UTF_8,
+        writeKotlinTables(
+            outputRoot = generatedKotlinRoot.get().asFile,
+            packageName = outputPackage,
+            unicodeVersion = version,
+            confusablesText = confusablesText,
+            derivedCorePropertiesText = derivedText,
         )
-        outputRoot.resolve("DefaultIgnorables.kt").writeText(
-            generateDefaultIgnorables(outputPackage, version, defaultIgnorables),
-            Charsets.UTF_8,
-        )
-
-        println("Wrote ConfusablesData.kt with ${mappings.size} mappings")
-        println("Wrote DefaultIgnorables.kt with ${defaultIgnorables.size} merged ranges")
     }
+}
+
+tasks.matching { it.name.startsWith("compileKotlin") || it.name.startsWith("compileTestKotlin") }.configureEach {
+    dependsOn(generateUnicodeData)
+}
+
+tasks.matching { it.name == "sourcesJar" || it.name.endsWith("SourcesJar") }.configureEach {
+    dependsOn(generateUnicodeData)
 }
 
 private fun fetchText(url: String): String {
     return URL(url).openStream().bufferedReader(Charsets.UTF_8).use { it.readText() }
+}
+
+private fun pinnedUnicodeVersion(confusablesFile: File): String? {
+    if (!confusablesFile.exists()) return null
+    val text = confusablesFile.readText(Charsets.UTF_8)
+    return unicodeVersionFromConfusables(text)
+}
+
+private fun unicodeVersionFromConfusables(confusablesText: String): String {
+    val match = Regex("^#\\s*Version:\\s*(.+)\\s*$", setOf(RegexOption.MULTILINE))
+        .find(confusablesText)
+        ?: error("Could not find a '# Version:' header in confusables.txt")
+    return match.groupValues[1].trim()
+}
+
+private fun readRequiredText(file: File, pathHint: String): String {
+    require(file.exists()) {
+        "Missing required file `$pathHint`. Run `./gradlew updateUnicodeData -PunicodeVersion=<version>` to create it."
+    }
+    return file.readText(Charsets.UTF_8)
+}
+
+private fun writeKotlinTables(
+    outputRoot: File,
+    packageName: String,
+    unicodeVersion: String,
+    confusablesText: String,
+    derivedCorePropertiesText: String,
+) {
+    val mappings = parseConfusables(confusablesText)
+    val defaultIgnorables = parseDefaultIgnorables(derivedCorePropertiesText)
+
+    val packageDir = outputRoot.resolve(packageName.replace('.', '/'))
+    packageDir.mkdirs()
+
+    packageDir.resolve("ConfusablesData.kt").writeText(
+        generateConfusablesData(packageName, unicodeVersion, mappings),
+        Charsets.UTF_8,
+    )
+    packageDir.resolve("DefaultIgnorables.kt").writeText(
+        generateDefaultIgnorables(packageName, unicodeVersion, defaultIgnorables),
+        Charsets.UTF_8,
+    )
+
+    println("Wrote ConfusablesData.kt with ${mappings.size} mappings")
+    println("Wrote DefaultIgnorables.kt with ${defaultIgnorables.size} merged ranges")
 }
 
 private data class ConfusableMapping(val source: Int, val target: List<Int>)
@@ -176,7 +269,7 @@ $targetsBlock
     }.joinToString(separator = "\n\n")
 
     return """
-// This file is generated by the `updateUnicodeData` Gradle task.
+// This file is generated by the `generateUnicodeData` Gradle task.
 // Source: https://www.unicode.org/Public/security/$unicodeVersion/confusables.txt
 // Unicode version: $unicodeVersion
 // Do not edit by hand.
@@ -247,7 +340,7 @@ private fun generateDefaultIgnorables(packageName: String, unicodeVersion: Strin
     val rangesBlock = flatRanges.chunked(8).joinToString(separator = ",\n") { "        " + it.joinToString(separator = ", ") } + ","
 
     return """
-// This file is generated by the `updateUnicodeData` Gradle task.
+// This file is generated by the `generateUnicodeData` Gradle task.
 // Source: https://www.unicode.org/Public/$unicodeVersion/ucd/DerivedCoreProperties.txt (Default_Ignorable_Code_Point)
 // Unicode version: $unicodeVersion
 // Do not edit by hand.

@@ -47,13 +47,10 @@ jobs:
       - name: Regenerate Unicode tables
         run: ./gradlew updateUnicodeData -PunicodeVersion=${{ steps.unicode.outputs.latest }}
 
-      - name: Update default Unicode version and docs
+      - name: Update docs
         run: |
           set -euo pipefail
           version="${{ steps.unicode.outputs.latest }}"
-
-          perl -pi -e "s/private val defaultUnicodeVersion = \\\"[^\\\"]+\\\"/private val defaultUnicodeVersion = \\\"$version\\\"/" \
-            buildSrc/src/main/kotlin/unicode-data.gradle.kts
 
           perl -pi -e "s/\\(Unicode [0-9.]+\\)/(Unicode $version)/g" README.md
           perl -pi -e "s/updateUnicodeData -PunicodeVersion=[0-9.]+/updateUnicodeData -PunicodeVersion=$version/" README.md
@@ -81,7 +78,7 @@ jobs:
         if: steps.diff.outputs.changed == 'true'
         uses: peter-evans/create-pull-request@v6
         with:
-          token: ${{ secrets.UNICODE_DATA_BOT_TOKEN || github.token }}
+          token: ${{ secrets.GITHUB_TOKEN }}
           branch: update/unicode-data
           delete-branch: true
           commit-message: Update Unicode data to ${{ steps.unicode.outputs.latest }}
@@ -90,3 +87,5 @@ jobs:
             Regenerated Unicode confusables + Default_Ignorable_Code_Point data.
 
             - `./gradlew updateUnicodeData -PunicodeVersion=${{ steps.unicode.outputs.latest }}`
+
+            Note: This PR is created with `GITHUB_TOKEN`, so other workflows may not run automatically. `allTests` ran in this workflow when changes were detected.
