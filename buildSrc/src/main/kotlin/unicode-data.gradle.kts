@@ -8,6 +8,8 @@
 import java.io.File
 import java.net.URL
 import org.jetbrains.kotlin.gradle.dsl.KotlinMultiplatformExtension
+import org.jetbrains.kotlin.gradle.tasks.KotlinCompilationTask
+import org.gradle.jvm.tasks.Jar
 
 private val outputPackage = "doist.x.confusables"
 private val unicodeDataDir = "resources/unicode-data"
@@ -18,12 +20,6 @@ private val generatedSourcesDir = "generated/unicode-data/commonMain/kotlin"
 val confusablesInputFile = layout.projectDirectory.file("$unicodeDataDir/$confusablesFileName")
 val derivedCorePropertiesInputFile = layout.projectDirectory.file("$unicodeDataDir/$derivedCorePropertiesFileName")
 val generatedKotlinRoot = layout.buildDirectory.dir(generatedSourcesDir)
-
-extensions.configure<KotlinMultiplatformExtension>("kotlin") {
-    sourceSets.named("commonMain") {
-        kotlin.srcDir(generatedKotlinRoot)
-    }
-}
 
 val generateUnicodeData = tasks.register("generateUnicodeData") {
     group = "build setup"
@@ -48,6 +44,22 @@ val generateUnicodeData = tasks.register("generateUnicodeData") {
     }
 }
 
+extensions.configure<KotlinMultiplatformExtension>("kotlin") {
+    sourceSets.named("commonMain") {
+        kotlin.srcDir(generatedKotlinRoot)
+    }
+}
+
+tasks.withType<KotlinCompilationTask<*>>().configureEach {
+    dependsOn(generateUnicodeData)
+}
+
+tasks.withType<Jar>().configureEach {
+    if (name == "sourcesJar" || name.endsWith("SourcesJar")) {
+        dependsOn(generateUnicodeData)
+    }
+}
+
 tasks.register("updateUnicodeData") {
     group = "build setup"
     description = "Download Unicode data files into `resources/unicode-data/` and regenerate Kotlin tables (network required)."
@@ -56,7 +68,6 @@ tasks.register("updateUnicodeData") {
 
     outputs.file(confusablesInputFile)
     outputs.file(derivedCorePropertiesInputFile)
-    outputs.dir(generatedKotlinRoot)
 
     doLast {
         val version = unicodeVersionProperty.orNull
@@ -78,23 +89,9 @@ tasks.register("updateUnicodeData") {
         confusablesInputFile.asFile.parentFile.mkdirs()
         confusablesInputFile.asFile.writeText(confusablesText, Charsets.UTF_8)
         derivedCorePropertiesInputFile.asFile.writeText(derivedText, Charsets.UTF_8)
-
-        writeKotlinTables(
-            outputRoot = generatedKotlinRoot.get().asFile,
-            packageName = outputPackage,
-            unicodeVersion = version,
-            confusablesText = confusablesText,
-            derivedCorePropertiesText = derivedText,
-        )
     }
-}
 
-tasks.matching { it.name.startsWith("compileKotlin") || it.name.startsWith("compileTestKotlin") }.configureEach {
-    dependsOn(generateUnicodeData)
-}
-
-tasks.matching { it.name == "sourcesJar" || it.name.endsWith("SourcesJar") }.configureEach {
-    dependsOn(generateUnicodeData)
+    finalizedBy(generateUnicodeData)
 }
 
 private fun fetchText(url: String): String {
