@@ -87,5 +87,3 @@ jobs:
             Regenerated Unicode confusables + Default_Ignorable_Code_Point data.
 
             - `./gradlew updateUnicodeData -PunicodeVersion=${{ steps.unicode.outputs.latest }}`
-
-            Note: This PR is created with `GITHUB_TOKEN`, so other workflows may not run automatically. `allTests` ran in this workflow when changes were detected.
