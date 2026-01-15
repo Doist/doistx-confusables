@@ -53,7 +53,7 @@ This library embeds data from:
 - UTS #39 `confusables.txt` (Unicode 16.0.0)
 - UCD `Default_Ignorable_Code_Point` (Unicode 16.0.0)
 
-Kotlin tables are generated into `build/` at build time from the pinned `unicode-data/` inputs.
+Kotlin tables are generated into `build/` at build time from the pinned `resources/unicode-data/` inputs.
 
 All Unicode data is subject to Unicode’s [Terms of Use](https://www.unicode.org/terms_of_use.html).
 

@@ -1,8 +1,8 @@
 /*
  * Generate Unicode data tables used by the library.
  *
- * - `generateUnicodeData` is wired into compilation and runs offline, using `unicode-data/` inputs.
- * - `updateUnicodeData` refreshes `unicode-data/` from unicode.org (network required) and regenerates.
+ * - `generateUnicodeData` is wired into compilation and runs offline, using `resources/unicode-data/` inputs.
+ * - `updateUnicodeData` refreshes `resources/unicode-data/` from unicode.org (network required) and regenerates.
  */
 
 import java.io.File
@@ -10,7 +10,7 @@ import java.net.URL
 import org.jetbrains.kotlin.gradle.dsl.KotlinMultiplatformExtension
 
 private val outputPackage = "doist.x.confusables"
-private val unicodeDataDir = "unicode-data"
+private val unicodeDataDir = "resources/unicode-data"
 private val confusablesFileName = "confusables.txt"
 private val derivedCorePropertiesFileName = "DerivedCoreProperties.txt"
 private val generatedSourcesDir = "generated/unicode-data/commonMain/kotlin"
@@ -27,7 +27,7 @@ extensions.configure<KotlinMultiplatformExtension>("kotlin") {
 
 val generateUnicodeData = tasks.register("generateUnicodeData") {
     group = "build setup"
-    description = "Generate Kotlin tables from Unicode data files in `unicode-data/`."
+    description = "Generate Kotlin tables from Unicode data files in `resources/unicode-data/`."
 
     inputs.file(confusablesInputFile)
     inputs.file(derivedCorePropertiesInputFile)
@@ -50,7 +50,7 @@ val generateUnicodeData = tasks.register("generateUnicodeData") {
 
 tasks.register("updateUnicodeData") {
     group = "build setup"
-    description = "Download Unicode data files into `unicode-data/` and regenerate Kotlin tables (network required)."
+    description = "Download Unicode data files into `resources/unicode-data/` and regenerate Kotlin tables (network required)."
 
     val unicodeVersionProperty = providers.gradleProperty("unicodeVersion")
 
