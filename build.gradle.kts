@@ -19,11 +19,9 @@ kotlin {
     jvmToolchain(11)
 
     sourceSets {
-        val normalizeVersion = "1.3.3"
-
         val commonMain by getting {
             dependencies {
-                implementation("com.doist.x:normalize:$normalizeVersion")
+                implementation("com.doist.x:normalize:1.3.3")
             }
         }
 
