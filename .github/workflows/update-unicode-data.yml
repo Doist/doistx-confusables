@@ -1,0 +1,92 @@
+name: Update Unicode data
+
+on:
+  schedule:
+    - cron: '00 6 * * 1'
+  workflow_dispatch:
+
+permissions:
+  contents: write
+  pull-requests: write
+
+concurrency:
+  group: update-unicode-data
+  cancel-in-progress: true
+
+jobs:
+  update:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-java@v3
+        with:
+          java-version: '17'
+          distribution: 'temurin'
+
+      - name: Determine latest Unicode version
+        id: unicode
+        run: |
+          set -euo pipefail
+
+          latest="$(
+            curl -sSL https://www.unicode.org/Public/security/latest/confusables.txt \
+              | awk -F': ' '/^# Version:/ {print $2; exit}' \
+              | tr -d '\r'
+          )"
+
+          if [ -z "$latest" ]; then
+            echo "Failed to determine latest Unicode version from confusables.txt" >&2
+            exit 1
+          fi
+
+          echo "latest=$latest" >> "$GITHUB_OUTPUT"
+
+      - name: Regenerate Unicode tables
+        run: ./gradlew updateUnicodeData -PunicodeVersion=${{ steps.unicode.outputs.latest }}
+
+      - name: Update default Unicode version and docs
+        run: |
+          set -euo pipefail
+          version="${{ steps.unicode.outputs.latest }}"
+
+          perl -pi -e "s/private val defaultUnicodeVersion = \\\"[^\\\"]+\\\"/private val defaultUnicodeVersion = \\\"$version\\\"/" \
+            buildSrc/src/main/kotlin/unicode-data.gradle.kts
+
+          perl -pi -e "s/\\(Unicode [0-9.]+\\)/(Unicode $version)/g" README.md
+          perl -pi -e "s/updateUnicodeData -PunicodeVersion=[0-9.]+/updateUnicodeData -PunicodeVersion=$version/" README.md
+
+      - name: Check if anything changed
+        id: diff
+        run: |
+          set -euo pipefail
+          if git diff --quiet; then
+            echo "changed=false" >> "$GITHUB_OUTPUT"
+          else
+            echo "changed=true" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Avoid "No usable sandbox" errors on Ubuntu
+        if: runner.os == 'Linux' && steps.diff.outputs.changed == 'true'
+        run: |
+          echo 0 | sudo tee /proc/sys/kernel/apparmor_restrict_unprivileged_userns
+
+      - name: Run tests
+        if: steps.diff.outputs.changed == 'true'
+        run: ./gradlew allTests
+        env:
+          ORG_GRADLE_PROJECT_targets: common
+
+      - name: Open pull request
+        if: steps.diff.outputs.changed == 'true'
+        uses: peter-evans/create-pull-request@v6
+        with:
+          token: ${{ secrets.UNICODE_DATA_BOT_TOKEN || github.token }}
+          branch: update/unicode-data
+          delete-branch: true
+          commit-message: Update Unicode data to ${{ steps.unicode.outputs.latest }}
+          title: Update Unicode data to ${{ steps.unicode.outputs.latest }}
+          body: |
+            Regenerated Unicode confusables + Default_Ignorable_Code_Point data.
+
+            - `./gradlew updateUnicodeData -PunicodeVersion=${{ steps.unicode.outputs.latest }}`
