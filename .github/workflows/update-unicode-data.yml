@@ -17,6 +17,8 @@ jobs:
   update:
     runs-on: ubuntu-latest
     timeout-minutes: 30
+    env:
+      ORG_GRADLE_PROJECT_targets: common
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-java@v3
@@ -74,8 +76,6 @@ jobs:
       - name: Run tests
         if: steps.diff.outputs.changed == 'true'
         run: ./gradlew allTests
-        env:
-          ORG_GRADLE_PROJECT_targets: common
 
       - name: Open pull request
         if: steps.diff.outputs.changed == 'true'
