@@ -6,6 +6,7 @@
  */
 
 import java.io.File
+import java.io.FileNotFoundException
 import java.net.URL
 import org.jetbrains.kotlin.gradle.dsl.KotlinMultiplatformExtension
 import org.jetbrains.kotlin.gradle.tasks.KotlinCompilationTask
@@ -74,14 +75,23 @@ tasks.register("updateUnicodeData") {
             ?: pinnedUnicodeVersion(confusablesInputFile.asFile)
             ?: error("Missing -PunicodeVersion and no existing `${confusablesInputFile.asFile.path}` to infer from.")
 
-        val confusablesUrl = "https://www.unicode.org/Public/security/$version/confusables.txt"
+        val confusablesVersionedUrl = "https://www.unicode.org/Public/security/$version/confusables.txt"
+        val confusablesLatestUrl = "https://www.unicode.org/Public/security/latest/confusables.txt"
         val derivedCorePropertiesUrl = "https://www.unicode.org/Public/$version/ucd/DerivedCoreProperties.txt"
 
-        val confusablesText = fetchText(confusablesUrl)
+        var confusablesSourceUrl = confusablesVersionedUrl
+        val confusablesText = try {
+            fetchText(confusablesVersionedUrl)
+        } catch (e: FileNotFoundException) {
+            confusablesSourceUrl = confusablesLatestUrl
+            fetchText(confusablesLatestUrl)
+        }
         val headerVersion = unicodeVersionFromConfusables(confusablesText)
         require(headerVersion == version) {
+            val fallbackHint =
+                if (confusablesSourceUrl == confusablesLatestUrl) " (fallback from $confusablesVersionedUrl)" else ""
             "confusables.txt version header did not match $version (got $headerVersion); " +
-                "did you mean to pass -PunicodeVersion=? (url=$confusablesUrl)"
+                "did you mean to pass -PunicodeVersion=? (url=$confusablesSourceUrl$fallbackHint)"
         }
 
         val derivedText = fetchText(derivedCorePropertiesUrl)

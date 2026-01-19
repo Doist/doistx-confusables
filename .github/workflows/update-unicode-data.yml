@@ -34,7 +34,7 @@ jobs:
 
           latest="$(
             curl -sSL https://www.unicode.org/Public/security/latest/confusables.txt \
-              | awk -F': ' '/^# Version:/ {print $2; exit}' \
+              | awk -F': ' '/^# Version:/ {version=$2} END {print version}' \
               | tr -d '\r'
           )"
 
