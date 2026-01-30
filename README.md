@@ -50,8 +50,8 @@ kotlin {
 ## Unicode data
 
 This library embeds data from:
-- UTS #39 `confusables.txt` (Unicode 16.0.0)
-- UCD `Default_Ignorable_Code_Point` (Unicode 16.0.0)
+- UTS #39 `confusables.txt` (Unicode 17.0.0)
+- UCD `Default_Ignorable_Code_Point` (Unicode 17.0.0)
 
 Kotlin tables are generated into `build/` at build time from the pinned `resources/unicode-data/` inputs.
 
@@ -62,7 +62,7 @@ All Unicode data is subject to Unicode’s [Terms of Use](https://www.unicode.or
 Run:
 
 ```bash
-./gradlew updateUnicodeData -PunicodeVersion=16.0.0
+./gradlew updateUnicodeData -PunicodeVersion=17.0.0
 ```
 
 ## License
