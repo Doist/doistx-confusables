@@ -9,10 +9,7 @@ import kotlin.test.assertTrue
 class ConfusablesExhaustiveTest {
     @Test
     fun allMappingsMatchSkeletons() {
-        val skipped = skippedMappingSources
-
         var mappingCount = 0
-        var skippedCount = 0
         var stableSourceCount = 0
         var defaultIgnorableSourceCount = 0
         var mismatchCount = 0
@@ -27,10 +24,6 @@ class ConfusablesExhaustiveTest {
 
         ConfusablesData.forEachMapping { sourceCodePoint, target ->
             mappingCount++
-            if (sourceCodePoint in skipped) {
-                skippedCount++
-                return@forEachMapping
-            }
 
             val lookupTarget = ConfusablesData.prototypeOf(sourceCodePoint)
             if (lookupTarget != target) {
@@ -54,7 +47,10 @@ class ConfusablesExhaustiveTest {
             val sourceString = sourceCodePoint.toStringFromCodePoint()
             val sourceSkeleton = sourceString.toSkeleton()
             if (sourceSkeleton.normalize(Form.NFD) != sourceSkeleton) {
-                recordMismatch("skeleton is not NFD for ${sourceCodePoint.toUPlusString()}: ${sourceSkeleton.toUPlusStringSequence()}")
+                recordMismatch(
+                    "skeleton is not NFD for ${sourceCodePoint.toUPlusString()}: " +
+                        sourceSkeleton.toUPlusStringSequence(),
+                )
             }
 
             val defaultIgnorable = sourceSkeleton.firstDefaultIgnorableCodePoint()
@@ -92,12 +88,18 @@ class ConfusablesExhaustiveTest {
             }
         }
 
-        assertEquals(ConfusablesData.MAPPING_COUNT, mappingCount, "ConfusablesData.forEachMapping must cover all entries")
+        assertEquals(
+            ConfusablesData.MAPPING_COUNT,
+            mappingCount,
+            "ConfusablesData.forEachMapping must cover all entries",
+        )
 
-        val testedCount = mappingCount - skippedCount
         assertTrue(
             mismatchCount == 0,
-            "Found $mismatchCount mismatches (tested=$testedCount stableSources=$stableSourceCount defaultIgnorableSources=$defaultIgnorableSourceCount skipped=$skippedCount). " +
+            "Found $mismatchCount mismatches (" +
+                "mappings=$mappingCount " +
+                "stableSources=$stableSourceCount " +
+                "defaultIgnorableSources=$defaultIgnorableSourceCount). " +
                 "First ${mismatchSamples.size}:\n${mismatchSamples.joinToString(separator = "\n")}",
         )
     }
