@@ -11,6 +11,7 @@
 .idea/**/usage.statistics.xml
 .idea/**/dictionaries
 .idea/**/shelf
+.idea/codeStyles/*
 
 # AWS User-specific
 .idea/**/aws.xml
@@ -215,6 +216,7 @@ bower_components
 
 # Compiled binary addons (https://nodejs.org/api/addons.html)
 build/Release
+.build
 
 # Dependency directories
 node_modules/

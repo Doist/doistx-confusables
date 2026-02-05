@@ -1,0 +1,23 @@
+// swift-tools-version:5.10
+import PackageDescription
+
+let package = Package(
+    name: "DoistxConfusables",
+    platforms: [
+        .iOS(.v15),
+        .watchOS(.v7)
+    ],
+    products: [
+        .library(
+            name: "DoistxConfusables",
+            targets: ["DoistxConfusables"]
+        )
+    ],
+    targets: [
+        .binaryTarget(
+            name: "DoistxConfusables",
+            url: "https://github.com/Doist/doistx-confusables/releases/download/v1.0.1/DoistxConfusables.xcframework.zip",
+            checksum: "ae1bdaed666b2f430c589ef68e81c496892747ccb32c5e4ff9da01ca6415d5d7"
+        )
+    ]
+)
