@@ -27,6 +27,8 @@ jobs:
           java-version: '17'
           distribution: 'temurin'
       - uses: gradle/actions/setup-gradle@v4
+      - run: sudo apt-get install -y libunistring-dev
+        if: runner.os == 'Linux'
       - run: |
           # Avoid "No usable sandbox" errors on Ubuntu, based on the instructions found here:
           # https://chromium.googlesource.com/chromium/src/+/main/docs/security/apparmor-userns-restrictions.md
@@ -52,6 +54,8 @@ jobs:
       - id: get_tag_version
         run: echo "VERSION=${GITHUB_REF#refs/tags/v}" >> $GITHUB_OUTPUT
         shell: bash
+      - run: sudo apt-get install -y libunistring-dev
+        if: runner.os == 'Linux'
       - run: ./gradlew assemble publishToSonatype closeAndReleaseSonatypeStagingRepository
         env:
           ORG_GRADLE_PROJECT_version: ${{ steps.get_tag_version.outputs.VERSION }}
