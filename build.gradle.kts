@@ -35,6 +35,7 @@ kotlin {
     ).forEach {
         it.binaries.framework {
             baseName = xcframeworkName
+            isStatic = false
             binaryOption("bundleId", "com.doist.doistx-confusables")
             xcf.add(this)
         }
