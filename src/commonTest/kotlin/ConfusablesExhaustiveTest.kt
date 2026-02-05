@@ -47,7 +47,10 @@ class ConfusablesExhaustiveTest {
             val sourceString = sourceCodePoint.toStringFromCodePoint()
             val sourceSkeleton = sourceString.toSkeleton()
             if (sourceSkeleton.normalize(Form.NFD) != sourceSkeleton) {
-                recordMismatch("skeleton is not NFD for ${sourceCodePoint.toUPlusString()}: ${sourceSkeleton.toUPlusStringSequence()}")
+                recordMismatch(
+                    "skeleton is not NFD for ${sourceCodePoint.toUPlusString()}: " +
+                        sourceSkeleton.toUPlusStringSequence(),
+                )
             }
 
             val defaultIgnorable = sourceSkeleton.firstDefaultIgnorableCodePoint()
@@ -85,11 +88,18 @@ class ConfusablesExhaustiveTest {
             }
         }
 
-        assertEquals(ConfusablesData.MAPPING_COUNT, mappingCount, "ConfusablesData.forEachMapping must cover all entries")
+        assertEquals(
+            ConfusablesData.MAPPING_COUNT,
+            mappingCount,
+            "ConfusablesData.forEachMapping must cover all entries",
+        )
 
         assertTrue(
             mismatchCount == 0,
-            "Found $mismatchCount mismatches (mappings=$mappingCount stableSources=$stableSourceCount defaultIgnorableSources=$defaultIgnorableSourceCount). " +
+            "Found $mismatchCount mismatches (" +
+                "mappings=$mappingCount " +
+                "stableSources=$stableSourceCount " +
+                "defaultIgnorableSources=$defaultIgnorableSourceCount). " +
                 "First ${mismatchSamples.size}:\n${mismatchSamples.joinToString(separator = "\n")}",
         )
     }
