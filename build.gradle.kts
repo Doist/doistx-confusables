@@ -58,9 +58,9 @@ kotlin {
 
 tasks.withType(XCFrameworkTask::class).configureEach {
     doLast {
-        File("$projectDir/Package.swift.template").copyTo(
-            File("${outputDir.resolve(buildType.getName())}/Package.swift")
-        )
+        val destination = File("${outputDir.resolve(buildType.getName())}/Package.swift")
+        destination.delete()
+        File("$projectDir/Package.swift.template").copyTo(destination)
     }
 }
 
