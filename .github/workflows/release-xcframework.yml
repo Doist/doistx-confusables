@@ -1,0 +1,80 @@
+name: Release XCFramework
+
+on:
+  push:
+    tags: [ v* ]
+
+jobs:
+  release-xcframework:
+    runs-on: macos-latest
+
+    timeout-minutes: 60
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Java
+        uses: actions/setup-java@v4
+        with:
+          distribution: "temurin"
+          java-version: "17"
+
+      - name: Get tag version
+        id: get_tag_version
+        run: echo "VERSION=${GITHUB_REF#refs/tags/v}" >> $GITHUB_OUTPUT
+
+      - name: Generate XCFramework
+        run: ./gradlew assembleDoistxConfusablesReleaseXCFramework
+        env:
+          ORG_GRADLE_PROJECT_version: ${{ steps.get_tag_version.outputs.VERSION }}
+
+      - name: Copy framework files to assets folder
+        run: |
+          mkdir assets
+          cp -R build/XCFrameworks/release/DoistxConfusables.xcframework assets/
+          cp build/XCFrameworks/release/Package.swift assets/
+
+      - name: Push framework files to Doist/doistx-confusables-xcframework
+        env:
+          GH_REPO_TOKEN: ${{ secrets.GH_REPO_TOKEN }}
+          VERSION: ${{ steps.get_tag_version.outputs.VERSION }}
+        run: |
+          # Extract author information from the current commit
+          AUTHOR_NAME=$(git log -1 --pretty=format:'%an')
+          AUTHOR_EMAIL=$(git log -1 --pretty=format:'%ae')
+
+          # Configure git with the original author
+          git config --global user.name "$AUTHOR_NAME"
+          git config --global user.email "$AUTHOR_EMAIL"
+
+          # Create a temporary directory outside the repository
+          TEMP_DIR=$(mktemp -d)
+          cd $TEMP_DIR
+
+          # Clone the target repository
+          git clone https://x-access-token:${GH_REPO_TOKEN}@github.com/Doist/doistx-confusables-xcframework.git
+          cd doistx-confusables-xcframework
+
+          # Copy framework files over
+          cp -R $GITHUB_WORKSPACE/assets/* .
+
+          # Commit and push
+          git add .
+          git commit -m "Release version ${VERSION}"
+          git tag "v${VERSION}"
+          git push origin main --tags
+
+          # Clean up
+          cd $GITHUB_WORKSPACE
+          rm -rf $TEMP_DIR
+
+      - name: Compress framework files
+        run: |
+          7z a -r doistx-confusables.xcframework.zip DoistxConfusables.xcframework/ Package.swift
+          rm -rf DoistxConfusables.xcframework/ Package.swift
+        working-directory: assets
+
+      - name: Add framework files to release
+        uses: softprops/action-gh-release@b4025e2cdd6e8c3ebde4107d4b5a6bac5e66818b
+        with:
+          files: assets/*
