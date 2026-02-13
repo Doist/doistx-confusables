@@ -2,6 +2,8 @@ import org.gradle.kotlin.dsl.the
 import org.jetbrains.kotlin.gradle.targets.js.yarn.YarnLockMismatchReport
 import org.jetbrains.kotlin.gradle.targets.js.yarn.YarnPlugin
 import org.jetbrains.kotlin.gradle.targets.js.yarn.YarnRootEnvSpec
+import org.jetbrains.kotlin.gradle.plugin.mpp.apple.XCFramework
+import org.jetbrains.kotlin.gradle.plugin.mpp.apple.XCFrameworkTask
 
 plugins {
     id("targets")
@@ -13,10 +15,31 @@ repositories {
     mavenCentral()
 }
 
+val xcframeworkName = "DoistxConfusables"
+val xcf = XCFramework(xcframeworkName)
+
 kotlin {
     explicitApi()
 
     jvmToolchain(11)
+
+    listOf(
+        iosX64(),
+        iosArm64(),
+        iosSimulatorArm64(),
+        watchosX64(),
+        watchosSimulatorArm64(),
+        watchosArm32(),
+        watchosArm64(),
+        watchosDeviceArm64(),
+    ).forEach {
+        it.binaries.framework {
+            baseName = xcframeworkName
+            isStatic = false
+            binaryOption("bundleId", "com.doist.doistx-confusables")
+            xcf.add(this)
+        }
+    }
 
     sourceSets {
         val commonMain by getting {
@@ -30,6 +53,14 @@ kotlin {
                 implementation(kotlin("test"))
             }
         }
+    }
+}
+
+tasks.withType(XCFrameworkTask::class).configureEach {
+    doLast {
+        val destination = File("${outputDir.resolve(buildType.getName())}/Package.swift")
+        destination.delete()
+        File("$projectDir/Package.swift.template").copyTo(destination)
     }
 }
 

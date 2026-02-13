@@ -371,3 +371,8 @@ gradle-app.setting
 # End of https://www.toptal.com/developers/gitignore/api/java,node,linux,macos,gradle,kotlin,windows,intellij+all
 
 .kotlin
+
+# Custom exclusions
+
+### xcframework build output
+.build
