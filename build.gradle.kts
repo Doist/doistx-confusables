@@ -44,7 +44,7 @@ kotlin {
     sourceSets {
         val commonMain by getting {
             dependencies {
-                implementation("com.doist.x:normalize:1.3.3")
+                implementation("com.doist.x:normalize:1.4.0")
             }
         }
 
