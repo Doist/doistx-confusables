@@ -4,12 +4,14 @@ All notable changes are documented in this file. The format follows [Keep a Chan
 
 ## [Unreleased]
 
+## [1.2.1] - 2026-10-03
+
 ### Fixed
 
 - Resolve the Swift package binary target from the bundled XCFramework
 - Upload the XCFramework only after Maven publication and GitHub release creation
 
-## [1.2.9] - 2026-10-02
+## [1.2.0] - 2026-10-02
 
 ### Changed
 
