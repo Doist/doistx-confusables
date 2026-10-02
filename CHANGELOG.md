@@ -4,6 +4,10 @@ All notable changes are documented in this file. The format follows [Keep a Chan
 
 ## [Unreleased]
 
+## [1.2.9] - 2026-10-02
+
+### Changed
+
 - Update Unicode data to 18.0.0
 
 ## [1.1.0] - 2026-01-30

@@ -40,7 +40,7 @@ kotlin {
    sourceSets {
       val commonMain by getting {
          dependencies {
-            implementation("com.doist.x:confusables:1.0.0")
+            implementation("com.doist.x:confusables:1.2.0")
          }
       }
    }
