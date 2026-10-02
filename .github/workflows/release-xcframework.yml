@@ -24,7 +24,7 @@ jobs:
         run: echo "VERSION=${GITHUB_REF#refs/tags/v}" >> $GITHUB_OUTPUT
 
       - name: Generate XCFramework
-        run: ./gradlew assembleDoistxConfusablesReleaseXCFramework
+        run: ./gradlew --no-daemon assembleDoistxConfusablesReleaseXCFramework
         env:
           ORG_GRADLE_PROJECT_version: ${{ steps.get_tag_version.outputs.VERSION }}
 
@@ -33,6 +33,23 @@ jobs:
           mkdir assets
           cp -R build/XCFrameworks/release/DoistxConfusables.xcframework assets/
           cp build/XCFrameworks/release/Package.swift assets/
+
+      - name: Verify Swift package manifest
+        run: |
+          swift package --package-path assets dump-package | jq -e '
+            .targets[0] | .type == "binary" and .path == "DoistxConfusables.xcframework"
+              and .url == null and .checksum == null
+          '
+
+      - name: Build Swift package consumer
+        run: |
+          for platform in 'iOS Simulator' 'watchOS Simulator'; do
+            xcodebuild -scheme SwiftPackageSmokeTest \
+              -destination "generic/platform=$platform" \
+              -derivedDataPath "$RUNNER_TEMP/swift-package-smoke-test" \
+              CODE_SIGNING_ALLOWED=NO build
+          done
+        working-directory: .github/swift-package-smoke-test
 
       - name: Push framework files to Doist/doistx-confusables-xcframework
         env:
