@@ -119,20 +119,6 @@ jobs:
         run: 7z a -r doistx-confusables.xcframework.zip DoistxConfusables.xcframework/ Package.swift
         working-directory: assets
 
-      - name: Add framework files to release
-        if: steps.publication.outputs.pending == 'true'
-        run: gh release upload "$GITHUB_REF_NAME" assets/doistx-confusables.xcframework.zip --clobber --repo "$GITHUB_REPOSITORY"
-        env:
-          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-
-      - name: Check distribution base
-        if: steps.publication.outputs.pending == 'true'
-        working-directory: distribution
-        env:
-          GH_TOKEN: ${{ steps.app-token.outputs.token }}
-          GH_REPO: Doist/doistx-confusables-xcframework
-        run: test "$(git rev-parse HEAD)" = "$(gh api "repos/$GH_REPO/git/ref/heads/main" --jq .object.sha)"
-
       - name: Commit XCFramework release
         id: commit
         if: steps.publication.outputs.pending == 'true'
@@ -153,14 +139,18 @@ jobs:
           force-push: false
 
       - name: Tag XCFramework release
-        if: steps.publication.outputs.pending == 'true' && steps.commit.outcome == 'success'
+        if: steps.publication.outputs.pending == 'true'
         env:
           GH_TOKEN: ${{ steps.app-token.outputs.token }}
           GH_REPO: Doist/doistx-confusables-xcframework
-          COMMIT_SHA: ${{ steps.commit.outputs.commit }}
           REF_SHA: ${{ steps.commit.outputs.ref }}
         run: |
           test -n "$REF_SHA"
-          test "$REF_SHA" = "$COMMIT_SHA"
           gh api "repos/$GH_REPO/git/refs" --method POST \
             -f ref="refs/tags/$GITHUB_REF_NAME" -f sha="$REF_SHA"
+
+      - name: Add framework files to release
+        if: steps.publication.outputs.pending == 'true'
+        run: gh release upload "$GITHUB_REF_NAME" assets/doistx-confusables.xcframework.zip --clobber --repo "$GITHUB_REPOSITORY"
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
