@@ -6,6 +6,10 @@ on:
 permissions:
   contents: write
 
+concurrency:
+  group: release-xcframework-${{ github.ref }}
+  cancel-in-progress: false
+
 jobs:
   release-xcframework:
     if: startsWith(github.ref, 'refs/tags/v')
@@ -68,7 +72,24 @@ jobs:
           repositories: doistx-confusables-xcframework
           permission-contents: write
 
+      - name: Check publication state
+        id: publication
+        env:
+          GH_TOKEN: ${{ steps.app-token.outputs.token }}
+          GH_REPO: Doist/doistx-confusables-xcframework
+        run: |
+          set -euo pipefail
+          tag=$(gh api "repos/$GH_REPO/git/matching-refs/tags/" | jq -r \
+            --arg ref "refs/tags/$GITHUB_REF_NAME" '.[] | select(.ref == $ref) | .object.sha')
+          if [[ -n "$tag" ]]; then
+            echo 'pending=false' >> "$GITHUB_OUTPUT"
+            echo 'Already published. Leaving the destination and release ZIP unchanged.' >> "$GITHUB_STEP_SUMMARY"
+          else
+            echo 'pending=true' >> "$GITHUB_OUTPUT"
+          fi
+
       - name: Checkout XCFramework repository
+        if: steps.publication.outputs.pending == 'true'
         uses: actions/checkout@v6
         with:
           repository: Doist/doistx-confusables-xcframework
@@ -78,6 +99,7 @@ jobs:
           persist-credentials: false
 
       - name: Update XCFramework files
+        if: steps.publication.outputs.pending == 'true'
         working-directory: distribution
         run: |
           # Replace, rather than overlay, so removed slices/files are deleted too.
@@ -86,16 +108,19 @@ jobs:
           git add -A -- DoistxConfusables.xcframework Package.swift
 
       - name: Compress framework files
+        if: steps.publication.outputs.pending == 'true'
         run: 7z a -r doistx-confusables.xcframework.zip DoistxConfusables.xcframework/ Package.swift
         working-directory: assets
 
       # Upload before tagging so a published destination always has its release ZIP.
       - name: Add framework files to release
+        if: steps.publication.outputs.pending == 'true'
         run: gh release upload "$GITHUB_REF_NAME" assets/doistx-confusables.xcframework.zip --clobber --repo "$GITHUB_REPOSITORY"
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
       - name: Commit and tag XCFramework release
+        if: steps.publication.outputs.pending == 'true'
         working-directory: distribution
         shell: python
         env:
