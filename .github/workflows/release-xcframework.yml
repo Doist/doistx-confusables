@@ -9,6 +9,7 @@ permissions:
 concurrency:
   group: release-doistx-confusables-xcframework
   cancel-in-progress: false
+  queue: max
 
 jobs:
   release-xcframework:
