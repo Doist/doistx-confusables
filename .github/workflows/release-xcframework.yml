@@ -2,18 +2,9 @@ name: Release XCFramework
 
 on:
   workflow_call:
-    secrets:
-      DOISTBOT_APP_ID:
-        required: true
-      DOISTBOT_APP_PRIVATE_KEY:
-        required: true
 
 permissions:
   contents: write
-
-concurrency:
-  group: release-xcframework-${{ github.ref }}
-  cancel-in-progress: false
 
 jobs:
   release-xcframework:
@@ -67,37 +58,17 @@ jobs:
         working-directory: .github/swift-package-smoke-test
 
       # Installation tokens expire after one hour. Mint only after the build.
-      - name: Create destination App token
+      - name: Authenticate release bot
         id: app-token
         uses: actions/create-github-app-token@64ab729a6294000f5aa4a4bc0b73d1f32bc45510 # v3.3.0
         with:
-          app-id: ${{ secrets.DOISTBOT_APP_ID }}
-          private-key: ${{ secrets.DOISTBOT_APP_PRIVATE_KEY }}
+          app-id: ${{ secrets.DOIST_RELEASE_BOT_ID }}
+          private-key: ${{ secrets.DOIST_RELEASE_BOT_PRIVATE_KEY }}
           owner: Doist
           repositories: doistx-confusables-xcframework
           permission-contents: write
-          permission-pull-requests: write
 
-      - name: Check publication state
-        id: publication
-        env:
-          GH_TOKEN: ${{ steps.app-token.outputs.token }}
-          GH_REPO: Doist/doistx-confusables-xcframework
-        run: |
-          set -euo pipefail
-          tag=$(gh api "repos/$GH_REPO/git/matching-refs/tags/" | jq -r \
-            --arg ref "refs/tags/$GITHUB_REF_NAME" '.[] | select(.ref == $ref) | .object.sha')
-          merged=$(gh pr list --repo "$GH_REPO" --state merged --base main \
-            --head "release/$GITHUB_REF_NAME" --json number --jq 'length')
-          if [[ -n "$tag" || "$merged" != 0 ]]; then
-            echo 'pending=false' >> "$GITHUB_OUTPUT"
-            echo 'Already tagged or merged. Leaving the release unchanged; retry destination tagging there if needed.' >> "$GITHUB_STEP_SUMMARY"
-          else
-            echo 'pending=true' >> "$GITHUB_OUTPUT"
-          fi
-
-      - name: Checkout destination
-        if: steps.publication.outputs.pending == 'true'
+      - name: Checkout XCFramework repository
         uses: actions/checkout@v6
         with:
           repository: Doist/doistx-confusables-xcframework
@@ -106,78 +77,63 @@ jobs:
           token: ${{ steps.app-token.outputs.token }}
           persist-credentials: false
 
-      - name: Stage exact distribution tree
-        if: steps.publication.outputs.pending == 'true'
-        id: distribution
+      - name: Update XCFramework files
         working-directory: distribution
         run: |
-          set -euo pipefail
           # Replace, rather than overlay, so removed slices/files are deleted too.
           rm -rf DoistxConfusables.xcframework Package.swift
           cp -a ../assets/DoistxConfusables.xcframework ../assets/Package.swift .
-          # Ensures even byte-identical releases have a version-specific PR.
-          printf '%s\n' "$GITHUB_REF_NAME" > .release-version
-          git add -A -- DoistxConfusables.xcframework Package.swift .release-version
-          # Keep even the base64 payload below the action's documented 40 MiB blob limit.
-          git ls-files --stage | while read -r mode oid stage path; do
-            size=$(git cat-file -s "$oid")
-            if (( (size + 2) / 3 * 4 >= 40 * 1024 * 1024 )); then
-              echo "File exceeds the signed-commit API limit: $path" >&2
-              exit 1
-            fi
-          done
-          echo "tree=$(git write-tree)" >> "$GITHUB_OUTPUT"
+          git add -A -- DoistxConfusables.xcframework Package.swift
 
       - name: Compress framework files
-        if: steps.publication.outputs.pending == 'true'
         run: 7z a -r doistx-confusables.xcframework.zip DoistxConfusables.xcframework/ Package.swift
         working-directory: assets
 
-      # Upload before opening the PR, so a merge cannot precede the release asset.
+      # Upload before tagging so a published destination always has its release ZIP.
       - name: Add framework files to release
-        if: steps.publication.outputs.pending == 'true'
         run: gh release upload "$GITHUB_REF_NAME" assets/doistx-confusables.xcframework.zip --clobber --repo "$GITHUB_REPOSITORY"
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
-      - name: Open signed distribution pull request
-        if: steps.publication.outputs.pending == 'true'
-        id: pull-request
-        uses: peter-evans/create-pull-request@5f6978faf089d4d20b00c7766989d076bb2fc7f1 # v8.1.1
-        with:
-          token: ${{ steps.app-token.outputs.token }}
-          path: distribution
-          base: main
-          branch: release/${{ github.ref_name }}
-          add-paths: |
-            DoistxConfusables.xcframework
-            Package.swift
-            .release-version
-          sign-commits: true
-          draft: always-true
-          commit-message: Release version ${{ steps.get_tag_version.outputs.VERSION }}
-          title: Release version ${{ steps.get_tag_version.outputs.VERSION }}
-          body: |
-            Built from [${{ github.repository }}@${{ github.ref_name }}](https://github.com/${{ github.repository }}/commit/${{ github.sha }}).
-
-            Check the [source run](https://github.com/${{ github.repository }}/actions/runs/${{ github.run_id }}) succeeded, including signed-head/tree verification, before marking ready and merging. Merge releases in version order; do not merge while a source rerun is in progress.
-            The destination workflow creates `${{ github.ref_name }}` at the merged commit, never at this PR's unmerged head.
-
-      - name: Verify signed pull request and exact tree
-        if: steps.publication.outputs.pending == 'true'
+      - name: Commit and tag XCFramework release
+        working-directory: distribution
+        shell: python
         env:
           GH_TOKEN: ${{ steps.app-token.outputs.token }}
           GH_REPO: Doist/doistx-confusables-xcframework
-          PR_NUMBER: ${{ steps.pull-request.outputs.pull-request-number }}
-          PR_HEAD: ${{ steps.pull-request.outputs.pull-request-head-sha }}
-          COMMITS_VERIFIED: ${{ steps.pull-request.outputs.pull-request-commits-verified }}
-          EXPECTED_TREE: ${{ steps.distribution.outputs.tree }}
+          VERSION: ${{ steps.get_tag_version.outputs.VERSION }}
         run: |
-          set -euo pipefail
-          test -n "$PR_NUMBER"
-          test "$COMMITS_VERIFIED" = true
-          head=$(gh pr view "$PR_NUMBER" --repo "$GH_REPO" --json headRefOid --jq .headRefOid)
-          test "$head" = "$PR_HEAD"
-          gh api "repos/$GH_REPO/git/commits/$head" | jq -e --arg tree "$EXPECTED_TREE" \
-            '.verification.verified == true and .tree.sha == $tree'
-          echo "Verified signed distribution PR: https://github.com/$GH_REPO/pull/$PR_NUMBER" >> "$GITHUB_STEP_SUMMARY"
+          import base64
+          import json
+          import os
+          import subprocess
+
+          def git(*args):
+              return subprocess.check_output(["git", *args])
+
+          def api(endpoint, payload, method="POST"):
+              return json.loads(subprocess.check_output(
+                  ["gh", "api", f"repos/{os.environ['GH_REPO']}/git/{endpoint}",
+                   "--method", method, "--input", "-"],
+                  input=json.dumps(payload).encode(),
+              ))
+
+          # Recreate the entire index, preserving binary bytes, modes and deletions.
+          tree = []
+          for entry in git("ls-files", "--stage", "-z").split(b"\0"):
+              if not entry:
+                  continue
+              metadata, path = entry.split(b"\t", 1)
+              mode, oid, stage = metadata.decode().split()
+              content = base64.b64encode(git("cat-file", "blob", oid)).decode()
+              blob = api("blobs", {"content": content, "encoding": "base64"})
+              tree.append({"path": path.decode(), "mode": mode, "type": "blob", "sha": blob["sha"]})
+          tree_sha = api("trees", {"tree": tree})["sha"]
+          # GitHub signs App API commits when author/committer/signature are omitted.
+          commit = api("commits", {
+              "message": f"Release version {os.environ['VERSION']}",
+              "tree": tree_sha,
+              "parents": [git("rev-parse", "HEAD").decode().strip()],
+          })["sha"]
+          api("refs/heads/main", {"sha": commit, "force": False}, "PATCH")
+          api("refs", {"ref": f"refs/tags/{os.environ['GITHUB_REF_NAME']}", "sha": commit})

@@ -91,6 +91,4 @@ jobs:
     permissions:
       contents: write
     uses: ./.github/workflows/release-xcframework.yml
-    secrets:
-      DOISTBOT_APP_ID: ${{ secrets.DOISTBOT_APP_ID }}
-      DOISTBOT_APP_PRIVATE_KEY: ${{ secrets.DOISTBOT_APP_PRIVATE_KEY }}
+    secrets: inherit
