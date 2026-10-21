@@ -2,12 +2,14 @@ name: Release XCFramework
 
 on:
   workflow_call:
-    secrets:
-      GH_REPO_TOKEN:
-        required: true
 
 permissions:
   contents: write
+
+concurrency:
+  group: release-doistx-confusables-xcframework
+  cancel-in-progress: false
+  queue: max
 
 jobs:
   release-xcframework:
@@ -60,47 +62,94 @@ jobs:
           done
         working-directory: .github/swift-package-smoke-test
 
-      - name: Push framework files to Doist/doistx-confusables-xcframework
+      - name: Authenticate release bot
+        id: app-token
+        uses: actions/create-github-app-token@64ab729a6294000f5aa4a4bc0b73d1f32bc45510 # v3.3.0
+        with:
+          app-id: ${{ secrets.DOIST_RELEASE_BOT_ID }}
+          private-key: ${{ secrets.DOIST_RELEASE_BOT_PRIVATE_KEY }}
+          owner: Doist
+          repositories: doistx-confusables-xcframework
+          permission-contents: write
+
+      - name: Check publication state
+        id: publication
         env:
-          GH_REPO_TOKEN: ${{ secrets.GH_REPO_TOKEN }}
-          VERSION: ${{ steps.get_tag_version.outputs.VERSION }}
+          GH_TOKEN: ${{ steps.app-token.outputs.token }}
+          GH_REPO: Doist/doistx-confusables-xcframework
         run: |
-          # Extract author information from the current commit
-          AUTHOR_NAME=$(git log -1 --pretty=format:'%an')
-          AUTHOR_EMAIL=$(git log -1 --pretty=format:'%ae')
+          set -euo pipefail
+          tag=$(gh api "repos/$GH_REPO/git/matching-refs/tags/$GITHUB_REF_NAME" | jq -r \
+            --arg ref "refs/tags/$GITHUB_REF_NAME" '.[] | select(.ref == $ref) | .object.sha')
+          if [[ -n "$tag" ]]; then
+            echo 'pending=false' >> "$GITHUB_OUTPUT"
+            echo 'Already published. Skipping commit and tag.' >> "$GITHUB_STEP_SUMMARY"
+          else
+            echo 'pending=true' >> "$GITHUB_OUTPUT"
+          fi
 
-          # Configure git with the original author
-          git config --global user.name "$AUTHOR_NAME"
-          git config --global user.email "$AUTHOR_EMAIL"
+      - name: Checkout XCFramework repository
+        if: steps.publication.outputs.pending == 'true'
+        uses: actions/checkout@v6
+        with:
+          repository: Doist/doistx-confusables-xcframework
+          ref: main
+          path: distribution
+          token: ${{ steps.app-token.outputs.token }}
+          persist-credentials: false
 
-          # Create a temporary directory outside the repository
-          TEMP_DIR=$(mktemp -d)
-          cd $TEMP_DIR
-
-          # Clone the target repository
-          git clone https://x-access-token:${GH_REPO_TOKEN}@github.com/Doist/doistx-confusables-xcframework.git
-          cd doistx-confusables-xcframework
-
-          # Copy framework files over
-          cp -R $GITHUB_WORKSPACE/assets/* .
-
-          # Commit and push
-          git add .
-          git commit -m "Release version ${VERSION}"
-          git tag "v${VERSION}"
-          git push origin main --tags
-
-          # Clean up
-          cd $GITHUB_WORKSPACE
-          rm -rf $TEMP_DIR
+      - name: Update XCFramework files
+        if: steps.publication.outputs.pending == 'true'
+        working-directory: distribution
+        run: |
+          rm -rf DoistxConfusables.xcframework Package.swift
+          cp -a ../assets/DoistxConfusables.xcframework ../assets/Package.swift .
+          git add -A -- DoistxConfusables.xcframework Package.swift
+          git diff --cached --name-only --no-renames -z > "$RUNNER_TEMP/xcframework-paths"
+          while IFS= read -r -d '' path; do
+            if [[ ! "$path" =~ ^[a-zA-Z0-9_./-]+$ ]]; then
+              echo '::error::Unsupported distribution filename for verified-bot-commit'
+              exit 1
+            fi
+          done < "$RUNNER_TEMP/xcframework-paths"
+        env:
+          LC_ALL: C
 
       - name: Compress framework files
-        run: |
-          7z a -r doistx-confusables.xcframework.zip DoistxConfusables.xcframework/ Package.swift
-          rm -rf DoistxConfusables.xcframework/ Package.swift
+        run: 7z a -r doistx-confusables.xcframework.zip DoistxConfusables.xcframework/ Package.swift
         working-directory: assets
 
+      - name: Commit XCFramework release
+        id: commit
+        if: steps.publication.outputs.pending == 'true'
+        uses: IAreKyleW00t/verified-bot-commit@1ee4374942e5c5f814e9b3121d766cbe45cea360 # v2.3.6
+        with:
+          token: ${{ steps.app-token.outputs.token }}
+          repository: Doist/doistx-confusables-xcframework
+          workspace: distribution
+          ref: refs/heads/main
+          files: |
+            DoistxConfusables.xcframework/**
+            Package.swift
+          message: Release version ${{ steps.get_tag_version.outputs.VERSION }}
+          auto-stage: false
+          allow-empty-commit: true
+          update-local: false
+          follow-symlinks: false
+          force-push: false
+
+      - name: Tag XCFramework release
+        if: steps.publication.outputs.pending == 'true'
+        env:
+          GH_TOKEN: ${{ steps.app-token.outputs.token }}
+          GH_REPO: Doist/doistx-confusables-xcframework
+          REF_SHA: ${{ steps.commit.outputs.ref }}
+        run: |
+          test -n "$REF_SHA"
+          gh api "repos/$GH_REPO/git/refs" --method POST \
+            -f ref="refs/tags/$GITHUB_REF_NAME" -f sha="$REF_SHA"
+
       - name: Add framework files to release
-        run: gh release upload "$GITHUB_REF_NAME" assets/doistx-confusables.xcframework.zip --repo "$GITHUB_REPOSITORY"
+        run: gh release upload "$GITHUB_REF_NAME" assets/doistx-confusables.xcframework.zip --clobber --repo "$GITHUB_REPOSITORY"
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
