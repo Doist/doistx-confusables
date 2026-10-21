@@ -79,7 +79,7 @@ jobs:
           GH_REPO: Doist/doistx-confusables-xcframework
         run: |
           set -euo pipefail
-          tag=$(gh api "repos/$GH_REPO/git/matching-refs/tags/" | jq -r \
+          tag=$(gh api "repos/$GH_REPO/git/matching-refs/tags/$GITHUB_REF_NAME" | jq -r \
             --arg ref "refs/tags/$GITHUB_REF_NAME" '.[] | select(.ref == $ref) | .object.sha')
           if [[ -n "$tag" ]]; then
             echo 'pending=false' >> "$GITHUB_OUTPUT"
