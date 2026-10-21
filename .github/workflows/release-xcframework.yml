@@ -7,7 +7,7 @@ permissions:
   contents: write
 
 concurrency:
-  group: release-xcframework-${{ github.ref }}
+  group: release-doistx-confusables-xcframework
   cancel-in-progress: false
 
 jobs:
@@ -104,6 +104,15 @@ jobs:
           rm -rf DoistxConfusables.xcframework Package.swift
           cp -a ../assets/DoistxConfusables.xcframework ../assets/Package.swift .
           git add -A -- DoistxConfusables.xcframework Package.swift
+          git diff --cached --name-only --no-renames -z > "$RUNNER_TEMP/xcframework-paths"
+          while IFS= read -r -d '' path; do
+            if [[ ! "$path" =~ ^[a-zA-Z0-9_./-]+$ ]]; then
+              echo '::error::Unsupported distribution filename for verified-bot-commit'
+              exit 1
+            fi
+          done < "$RUNNER_TEMP/xcframework-paths"
+        env:
+          LC_ALL: C
 
       - name: Compress framework files
         if: steps.publication.outputs.pending == 'true'
@@ -115,6 +124,14 @@ jobs:
         run: gh release upload "$GITHUB_REF_NAME" assets/doistx-confusables.xcframework.zip --clobber --repo "$GITHUB_REPOSITORY"
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Check distribution base
+        if: steps.publication.outputs.pending == 'true'
+        working-directory: distribution
+        env:
+          GH_TOKEN: ${{ steps.app-token.outputs.token }}
+          GH_REPO: Doist/doistx-confusables-xcframework
+        run: test "$(git rev-parse HEAD)" = "$(gh api "repos/$GH_REPO/git/ref/heads/main" --jq .object.sha)"
 
       - name: Commit XCFramework release
         id: commit
