@@ -83,7 +83,7 @@ jobs:
             --arg ref "refs/tags/$GITHUB_REF_NAME" '.[] | select(.ref == $ref) | .object.sha')
           if [[ -n "$tag" ]]; then
             echo 'pending=false' >> "$GITHUB_OUTPUT"
-            echo 'Already published. Leaving the release unchanged.' >> "$GITHUB_STEP_SUMMARY"
+            echo 'Already published. Skipping commit and tag.' >> "$GITHUB_STEP_SUMMARY"
           else
             echo 'pending=true' >> "$GITHUB_OUTPUT"
           fi
@@ -116,7 +116,6 @@ jobs:
           LC_ALL: C
 
       - name: Compress framework files
-        if: steps.publication.outputs.pending == 'true'
         run: 7z a -r doistx-confusables.xcframework.zip DoistxConfusables.xcframework/ Package.swift
         working-directory: assets
 
@@ -151,7 +150,6 @@ jobs:
             -f ref="refs/tags/$GITHUB_REF_NAME" -f sha="$REF_SHA"
 
       - name: Add framework files to release
-        if: steps.publication.outputs.pending == 'true'
         run: gh release upload "$GITHUB_REF_NAME" assets/doistx-confusables.xcframework.zip --clobber --repo "$GITHUB_REPOSITORY"
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
