@@ -61,7 +61,6 @@ jobs:
           done
         working-directory: .github/swift-package-smoke-test
 
-      # Installation tokens expire after one hour. Mint only after the build.
       - name: Authenticate release bot
         id: app-token
         uses: actions/create-github-app-token@64ab729a6294000f5aa4a4bc0b73d1f32bc45510 # v3.3.0
@@ -83,7 +82,7 @@ jobs:
             --arg ref "refs/tags/$GITHUB_REF_NAME" '.[] | select(.ref == $ref) | .object.sha')
           if [[ -n "$tag" ]]; then
             echo 'pending=false' >> "$GITHUB_OUTPUT"
-            echo 'Already published. Leaving the destination and release ZIP unchanged.' >> "$GITHUB_STEP_SUMMARY"
+            echo 'Already published. Leaving the release unchanged.' >> "$GITHUB_STEP_SUMMARY"
           else
             echo 'pending=true' >> "$GITHUB_OUTPUT"
           fi
@@ -102,7 +101,6 @@ jobs:
         if: steps.publication.outputs.pending == 'true'
         working-directory: distribution
         run: |
-          # Replace, rather than overlay, so removed slices/files are deleted too.
           rm -rf DoistxConfusables.xcframework Package.swift
           cp -a ../assets/DoistxConfusables.xcframework ../assets/Package.swift .
           git add -A -- DoistxConfusables.xcframework Package.swift
@@ -112,7 +110,6 @@ jobs:
         run: 7z a -r doistx-confusables.xcframework.zip DoistxConfusables.xcframework/ Package.swift
         working-directory: assets
 
-      # Upload before tagging so a published destination always has its release ZIP.
       - name: Add framework files to release
         if: steps.publication.outputs.pending == 'true'
         run: gh release upload "$GITHUB_REF_NAME" assets/doistx-confusables.xcframework.zip --clobber --repo "$GITHUB_REPOSITORY"
