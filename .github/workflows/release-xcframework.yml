@@ -116,46 +116,34 @@ jobs:
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
-      - name: Commit and tag XCFramework release
+      - name: Commit XCFramework release
+        id: commit
         if: steps.publication.outputs.pending == 'true'
-        working-directory: distribution
-        shell: python
+        uses: IAreKyleW00t/verified-bot-commit@1ee4374942e5c5f814e9b3121d766cbe45cea360 # v2.3.6
+        with:
+          token: ${{ steps.app-token.outputs.token }}
+          repository: Doist/doistx-confusables-xcframework
+          workspace: distribution
+          ref: refs/heads/main
+          files: |
+            DoistxConfusables.xcframework/**
+            Package.swift
+          message: Release version ${{ steps.get_tag_version.outputs.VERSION }}
+          auto-stage: false
+          allow-empty-commit: true
+          update-local: false
+          follow-symlinks: false
+          force-push: false
+
+      - name: Tag XCFramework release
+        if: steps.publication.outputs.pending == 'true' && steps.commit.outcome == 'success'
         env:
           GH_TOKEN: ${{ steps.app-token.outputs.token }}
           GH_REPO: Doist/doistx-confusables-xcframework
-          VERSION: ${{ steps.get_tag_version.outputs.VERSION }}
+          COMMIT_SHA: ${{ steps.commit.outputs.commit }}
+          REF_SHA: ${{ steps.commit.outputs.ref }}
         run: |
-          import base64
-          import json
-          import os
-          import subprocess
-
-          def git(*args):
-              return subprocess.check_output(["git", *args])
-
-          def api(endpoint, payload, method="POST"):
-              return json.loads(subprocess.check_output(
-                  ["gh", "api", f"repos/{os.environ['GH_REPO']}/git/{endpoint}",
-                   "--method", method, "--input", "-"],
-                  input=json.dumps(payload).encode(),
-              ))
-
-          # Recreate the entire index, preserving binary bytes, modes and deletions.
-          tree = []
-          for entry in git("ls-files", "--stage", "-z").split(b"\0"):
-              if not entry:
-                  continue
-              metadata, path = entry.split(b"\t", 1)
-              mode, oid, stage = metadata.decode().split()
-              content = base64.b64encode(git("cat-file", "blob", oid)).decode()
-              blob = api("blobs", {"content": content, "encoding": "base64"})
-              tree.append({"path": path.decode(), "mode": mode, "type": "blob", "sha": blob["sha"]})
-          tree_sha = api("trees", {"tree": tree})["sha"]
-          # GitHub signs App API commits when author/committer/signature are omitted.
-          commit = api("commits", {
-              "message": f"Release version {os.environ['VERSION']}",
-              "tree": tree_sha,
-              "parents": [git("rev-parse", "HEAD").decode().strip()],
-          })["sha"]
-          api("refs/heads/main", {"sha": commit, "force": False}, "PATCH")
-          api("refs", {"ref": f"refs/tags/{os.environ['GITHUB_REF_NAME']}", "sha": commit})
+          test -n "$REF_SHA"
+          test "$REF_SHA" = "$COMMIT_SHA"
+          gh api "repos/$GH_REPO/git/refs" --method POST \
+            -f ref="refs/tags/$GITHUB_REF_NAME" -f sha="$REF_SHA"
