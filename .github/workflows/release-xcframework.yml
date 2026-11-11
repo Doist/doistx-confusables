@@ -68,7 +68,7 @@ jobs:
         with:
           app-id: ${{ secrets.DOIST_RELEASE_BOT_ID }}
           private-key: ${{ secrets.DOIST_RELEASE_BOT_PRIVATE_KEY }}
-          owner: Doist
+          owner: todoist
           repositories: doistx-confusables-xcframework
           permission-contents: write
 
@@ -76,7 +76,7 @@ jobs:
         id: publication
         env:
           GH_TOKEN: ${{ steps.app-token.outputs.token }}
-          GH_REPO: Doist/doistx-confusables-xcframework
+          GH_REPO: todoist/doistx-confusables-xcframework
         run: |
           set -euo pipefail
           tag=$(gh api "repos/$GH_REPO/git/matching-refs/tags/$GITHUB_REF_NAME" | jq -r \
@@ -92,7 +92,7 @@ jobs:
         if: steps.publication.outputs.pending == 'true'
         uses: actions/checkout@v6
         with:
-          repository: Doist/doistx-confusables-xcframework
+          repository: todoist/doistx-confusables-xcframework
           ref: main
           path: distribution
           token: ${{ steps.app-token.outputs.token }}
@@ -125,7 +125,7 @@ jobs:
         uses: IAreKyleW00t/verified-bot-commit@1ee4374942e5c5f814e9b3121d766cbe45cea360 # v2.3.6
         with:
           token: ${{ steps.app-token.outputs.token }}
-          repository: Doist/doistx-confusables-xcframework
+          repository: todoist/doistx-confusables-xcframework
           workspace: distribution
           ref: refs/heads/main
           files: |
@@ -142,7 +142,7 @@ jobs:
         if: steps.publication.outputs.pending == 'true'
         env:
           GH_TOKEN: ${{ steps.app-token.outputs.token }}
-          GH_REPO: Doist/doistx-confusables-xcframework
+          GH_REPO: todoist/doistx-confusables-xcframework
           REF_SHA: ${{ steps.commit.outputs.ref }}
         run: |
           test -n "$REF_SHA"
